@@ -718,21 +718,25 @@ void Dns::addCacheEntry(const StatusEntry &s,const uint32_t &ttl,const std::stri
     }
 
     CacheAAAAEntry &entry=cacheAAAA[host];
-    if(ttl<24*3600)
+    // normal case: check time minimum each 5min, maximum 24h
+    if(s==StatusEntry_Right)
     {
-        //in case of wrong ttl, ttl too short or dns error
         if(ttl<5*60)
-        {
-            if(s==StatusEntry_Right)
-                entry.outdated_date=time(NULL)+5*60/CACHETIMEDIVIDER;
-            else
-                entry.outdated_date=time(NULL)+3600/CACHETIMEDIVIDER;
-        }
-        else
+            entry.outdated_date=time(NULL)+5*60/CACHETIMEDIVIDER;
+        else if(ttl<24*3600)
             entry.outdated_date=time(NULL)+ttl/CACHETIMEDIVIDER;
+        else
+            entry.outdated_date=time(NULL)+24*3600/CACHETIMEDIVIDER;
     }
-    else
-        entry.outdated_date=time(NULL)+24*3600/CACHETIMEDIVIDER;
+    else // error case: check time minimum each 10s, maximum 10min
+    {
+        if(ttl<10)
+            entry.outdated_date=time(NULL)+10/CACHETIMEDIVIDER;
+        else if(ttl<600)
+            entry.outdated_date=time(NULL)+ttl/CACHETIMEDIVIDER;
+        else
+            entry.outdated_date=time(NULL)+600/CACHETIMEDIVIDER;
+    }
     #ifdef DEBUGDNS
     std::cerr << __FILE__ << ":" << __LINE__ << " insert into cache " << host << " " << (int64_t)entry.outdated_date << std::endl;
     #endif
@@ -893,18 +897,32 @@ bool Dns::getAAAA(Http * client, const std::string &host, const bool &https)
                         client->dnsRight(targetHttp);
                     }
                 break;
+                default:
                 case StatusEntry_Error:
                     #ifdef DEBUGDNS
                     std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
                     #endif
                     client->dnsError();
                 break;
-                default:
                 case StatusEntry_Wrong:
+                {
                     #ifdef DEBUGDNS
-                    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+                    char str[INET6_ADDRSTRLEN];
+                    inet_ntop(AF_INET6, &entry.sin6_addr, str, INET6_ADDRSTRLEN);
+                    std::cerr << __FILE__ << ":" << __LINE__ << " is wrong in cache: " << host << "->" << str << std::endl;
                     #endif
                     client->dnsWrong();
+                }
+                break;
+                case StatusEntry_Timeout:
+                {
+                    #ifdef DEBUGDNS
+                    char str[INET6_ADDRSTRLEN];
+                    inet_ntop(AF_INET6, &entry.sin6_addr, str, INET6_ADDRSTRLEN);
+                    std::cerr << __FILE__ << ":" << __LINE__ << " is timeout (" << (entry.outdated_date-t) << "s) in cache: " << host << "->" << str << std::endl;
+                    #endif
+                    client->dnsWrong();
+                }
                 break;
             }
             return true;
@@ -1073,7 +1091,7 @@ void Dns::cancelClient(Http * client, const std::string &host,const bool &https)
                 }
                 #ifdef DEBUGDNS
                 if(index>=httpsList.size())
-                    std::cerr << __FILE__ << ":" << __LINE__ << " try remove: " << client << " to \"" << host << "\" but not found WARNING" << std::endl;
+                    std::cerr << __FILE__ << ":" << __LINE__ << " try remove: " << client << " to \"" << host << "\" but not found WARNING https" << std::endl;
                 #endif
             }
             else
@@ -1091,7 +1109,7 @@ void Dns::cancelClient(Http * client, const std::string &host,const bool &https)
                 }
                 #ifdef DEBUGDNS
                 if(index>=httpList.size())
-                    std::cerr << __FILE__ << ":" << __LINE__ << " try remove: " << client << " to \"" << host << "\" but not found WARNING" << std::endl;
+                    std::cerr << __FILE__ << ":" << __LINE__ << " try remove: " << client << " to \"" << host << "\" but not found WARNING http" << std::endl;
                 #endif
             }
             return;
@@ -1102,7 +1120,7 @@ void Dns::cancelClient(Http * client, const std::string &host,const bool &https)
     else
     {
         #ifdef DEBUGDNS
-        std::cerr << __FILE__ << ":" << __LINE__ << " try remove: \"" << host << "\" but not found WARNING" << std::endl;
+        std::cerr << __FILE__ << ":" << __LINE__ << " try remove: \"" << host << "\" but not found WARNING (queryListByHost.find(host)!=queryListByHost.cend()" << std::endl;
         #endif
     }
 }
