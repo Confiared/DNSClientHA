@@ -43,7 +43,8 @@ private:
     {
         StatusEntry_Right=0x00,
         StatusEntry_Wrong=0x01,
-        StatusEntry_Error=0x02
+        StatusEntry_Error=0x02,
+        StatusEntry_Timeout=0x03,
     };
     enum Mode : uint8_t
     {

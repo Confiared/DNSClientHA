@@ -67,8 +67,7 @@ Dns::Dns()
         size_t len = 0;
         ssize_t read;
 
-        //fp = fopen("/etc/resolv.conf", "r");
-        fp = fopen("resolv.conf", "r");
+        fp = fopen("/etc/resolv.conf", "r");
         if (fp == NULL)
         {
             std::cerr << "Unable to open /etc/resolv.conf" << std::endl;
@@ -435,7 +434,7 @@ void Dns::parseEvent(const epoll_event &event,const DnsSocket *socket)
                             }
                             if(cacheFound==false)
                             {
-                                addCacheEntryFailed(StatusEntry_Wrong,600,q.host);
+                                addCacheEntryFailed(StatusEntry_Wrong,300,q.host);
                                 for(Http * const c : http)
                                     c->dnsError();
                                 for(Http * const c : https)
@@ -492,7 +491,7 @@ void Dns::parseEvent(const epoll_event &event,const DnsSocket *socket)
                                     }
                                     if(cacheFound==false)
                                     {
-                                        addCacheEntryFailed(StatusEntry_Error,600,q.host);
+                                        addCacheEntryFailed(StatusEntry_Error,300,q.host);
                                         for(Http * const c : http)
                                             c->dnsError();
                                         for(Http * const c : https)
@@ -642,7 +641,7 @@ void Dns::parseEvent(const epoll_event &event,const DnsSocket *socket)
                             }
                             if(cacheFound==false)
                             {
-                                addCacheEntryFailed(StatusEntry_Error,600,q.host);
+                                addCacheEntryFailed(StatusEntry_Error,300,q.host);
                                 for(Http * const c : http)
                                     c->dnsError();
                                 for(Http * const c : https)
@@ -688,7 +687,10 @@ void Dns::addCacheEntryFailed(const StatusEntry &s,const uint32_t &ttl,const std
         abort();
     }
     #endif
-    addCacheEntry(s,ttl,host,sin6_addr);
+    if(ttl<600)//always retry after 10min max
+        addCacheEntry(s,ttl,host,sin6_addr);
+    else
+        addCacheEntry(s,600,host,sin6_addr);
 }
 
 void Dns::addCacheEntry(const StatusEntry &s,const uint32_t &ttl,const std::string &host,const in6_addr &sin6_addr)
@@ -1275,7 +1277,7 @@ void Dns::checkQueries()
                     #ifdef DEBUGDNS
                     std::cerr << __FILE__ << ":" << __LINE__ << " remove query due to timeout: " << id << " remain query: " << queryList.size() << std::endl;
                     #endif
-                    addCacheEntryFailed(StatusEntry_Error,600,query.host);
+                    addCacheEntryFailed(StatusEntry_Timeout,30,query.host);
                 }
                 removeQuery(id);
             }
