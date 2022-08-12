@@ -39,6 +39,38 @@ int main(int argc, char *argv[])
     dnsCache.start(3600*1000);
     DNSQuery dnsQuery;
     dnsQuery.start(10);
+    
+    #ifdef DEBUGDNS
+    {
+        FILE *stream;
+        char *line = NULL;
+        size_t len = 0;
+        ssize_t nread;
+
+        stream = fopen("dns.txt", "r");
+        if (stream != NULL)
+        {
+            while ((nread = getline(&line, &len, stream)) != -1) {
+                std::string str(line);
+                std::size_t pos=str.find(" ");
+                if (pos!=std::string::npos)
+                {
+                    std::string host=str.substr(0,pos);
+                    std::string ipv6=str.substr(pos+1);
+                    if(!ipv6.empty())
+                    {
+                        if(ipv6.at(ipv6.size()-1)=='\n')
+                            ipv6=ipv6.substr(0,ipv6.size()-1);
+                        Dns::dns->hardcodedDns[host]=ipv6;
+                    }
+                }
+            }
+
+            free(line);
+            fclose(stream);
+        }
+    }
+    #endif
 
     Http *http=new Http();
     Dns::dns->getAAAA(http,"confiared.com",true);
